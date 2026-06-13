@@ -121,18 +121,23 @@ async def dmall(ctx, *, message):
 # ================= JOIN VOICE =================
 @bot.command()
 async def join(ctx):
-    if not ctx.author.voice:
-        await ctx.send("❌ You are not in a voice channel!")
-        return
+    try:
+        if not ctx.author.voice:
+            await ctx.send("❌ You are not in a voice channel!")
+            return
 
-    channel = ctx.author.voice.channel
+        channel = ctx.author.voice.channel
 
-    if ctx.voice_client:
-        await ctx.voice_client.move_to(channel)
-    else:
-        await channel.connect()
+        if ctx.voice_client:
+            await ctx.voice_client.move_to(channel)
+        else:
+            await channel.connect()
 
-    await ctx.send("🎧 Joined voice channel")
+        await ctx.send("🎧 Joined voice channel")
+
+    except Exception as e:
+        print(f"JOIN ERROR: {e}")
+        await ctx.send(f"❌ Join Error: {e}")
 
 
 # ================= PLAY MUSIC =================
