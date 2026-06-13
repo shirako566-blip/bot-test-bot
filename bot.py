@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 import time
 import yt_dlp
 import os
@@ -8,15 +9,168 @@ import os
 TOKEN = os.getenv("TOKEN")
 
 # ================= INTENTS =================
-intents = discord.Intents.default()
-intents.members = True
-intents.message_content = True
-intents.voice_states = True
-
+intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ================= AFK SYSTEM =================
 afk_users = {}
+
+# ================= SYNC SLASH COMMANDS =================
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
+    try:
+        synced = await bot.tree.sync()
+        print(f"Slash commands synced: {len(synced)}")
+    except Exception as e:
+        print(f"Sync error: {e}")
+
+
+# ================= TEST =================
+@bot.command(name="test")
+async def test(ctx):
+    await ctx.send("✅ Bot is running (prefix command)")
+
+
+@bot.tree.command(name="test", description="Check bot status")
+async def test_slash(interaction: discord.Interaction):
+    await interaction.response.send_message("✅ Bot is running (slash command)")
+
+
+# ================= INTRO =================
+@bot.command(name="intro")
+async def intro(ctx):
+    await ctx.send("🤖 Bot Test OFC Online (prefix)")
+
+
+@bot.tree.command(name="intro", description="Bot intro")
+async def intro_slash(interaction: discord.Interaction):
+    await interaction.response.send_message("🤖 Bot Test OFC Online (slash)")
+
+
+# ================= PURGE (HYBRID CORE FUNCTION) =================
+async def purge_logic(channel, amount):
+    if amount <= 0:
+        return None
+    if amount > 100:
+        return None
+
+    deleted = await channel.purge(limit=amount + 1)
+    return len(deleted) - 1
+
+
+# PREFIX PURGE
+@bot.command(name="purge")
+@commands.has_permissions(manage_messages=True)
+async def purge(ctx, amount: int):
+    result = await purge_logic(ctx.channel, amount)
+
+    if result is None:
+        return await ctx.send("❌ Enter 1–100 only")
+
+    await ctx.send(f"🧹 Deleted {result} messages", delete_after=5)
+
+
+# SLASH PURGE
+@bot.tree.command(name="purge", description="Delete messages (1–100)")
+@app_commands.describe(amount="Number of messages")
+async def purge_slash(interaction: discord.Interaction, amount: int):
+
+    if not interaction.user.guild_permissions.manage_messages:
+        return await interaction.response.send_message(
+            "❌ No permission",
+            ephemeral=True
+        )
+
+    result = await purge_logic(interaction.channel, amount)
+
+    if result is None:
+        return await interaction.response.send_message(
+            "❌ Enter 1–100 messages",
+            ephemeral=True
+        )
+
+    await interaction.response.send_message(
+        f"🧹 Deleted {result} messages",
+        ephemeral=True
+    )
+
+
+# ================= AFK SYSTEM =================
+@bot.command(name="afk")
+async def afk(ctx, *, reason="AFK"):
+    afk_users[ctx.author.id] = {
+        "reason": reason,
+        "time": time.time()
+    }
+
+    await ctx.send(f"😴 You are now AFK: {reason}")
+
+
+@bot.tree.command(name="afk", description="Set AFK status")
+@app_commands.describe(reason="AFK reason")
+async def afk_slash(interaction: discord.Interaction, reason: str = "AFK"):
+
+    afk_users[interaction.user.id] = {
+        "reason": reason,
+        "time": time.time()
+    }
+
+    await interaction.response.send_message(
+        f"😴 AFK set: {reason}",
+        ephemeral=True
+    )
+    # ================= AFK HANDLER =================
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    user_id = message.author.id
+
+    # remove AFK
+    if user_id in afk_users:
+        data = afk_users.pop(user_id)
+        afk_time = round(time.time() - data["time"])
+
+        await message.channel.send(
+            f"🟢 Welcome back {message.author.mention}\n"
+            f"Reason: {data['reason']}\n"
+            f"AFK Time: {afk_time}s"
+        )
+
+    # mention check
+    for user in message.mentions:
+        if user.id in afk_users:
+            data = afk_users[user.id]
+            afk_time = round(time.time() - data["time"])
+
+            await message.channel.send(
+                f"😴 {user.name} is AFK\n"
+                f"Reason: {data['reason']}\n"
+                f"Time: {afk_time}s"
+            )
+
+    await bot.process_commands(message)
+
+
+# ================= DM ALL (PREFIX ONLY - SAFE ADMIN TOOL) =================
+@bot.command(name="dmall")
+@commands.has_permissions(administrator=True)
+async def dmall(ctx, *, message):
+    sent = 0
+
+    async for member in ctx.guild.fetch_members(limit=None):
+        if member.bot:
+            continue
+
+        try:
+            await member.send(message)
+            sent += 1
+        except:
+            pass
+
+    await ctx.send(f"📩 Sent to {sent} members")
+
 
 # ================= MUSIC SETUP =================
 ytdl_format_options = {
@@ -33,116 +187,26 @@ ffmpeg_options = {
 ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
 
 
-@bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user}")
+# ================= JOIN =================
+@bot.command(name="join")
+async def join(ctx):
+    if not ctx.author.voice:
+        return await ctx.send("❌ Join voice first")
 
-
-# ================= TEST COMMAND =================
-@bot.command()
-async def test(ctx):
-    results = []
-
-    results.append("✅ Bot is running")
-
-    if isinstance(afk_users, dict):
-        results.append("✅ AFK system OK")
-    else:
-        results.append("❌ AFK system error")
+    channel = ctx.author.voice.channel
 
     if ctx.voice_client:
-        results.append("🎧 Voice: Connected")
+        await ctx.voice_client.move_to(channel)
     else:
-        results.append("🎧 Voice: Not connected")
+        await channel.connect()
 
-    perms = ctx.guild.me.guild_permissions
-
-    if perms.send_messages:
-        results.append("✅ Send Messages OK")
-    else:
-        results.append("❌ Missing Send Messages permission")
-
-    if perms.connect:
-        results.append("✅ Voice Connect OK")
-    else:
-        results.append("❌ Missing Voice permission")
-
-    if perms.speak:
-        results.append("✅ Speak Permission OK")
-    else:
-        results.append("❌ Missing Speak permission")
-
-    await ctx.send("\n".join(results))
+    await ctx.send("🎧 Joined voice")
 
 
-# ================= INTRO =================
-@bot.command()
-async def intro(ctx):
-    await ctx.send(
-        "🤖 **Booting up systems...**\n"
-        "🎧 Music Engine: Online\n"
-        "😴 AFK System: Active\n"
-        "📩 DM System: Ready\n\n"
-        "👋 Hello! I am **Bot Test OFC**\n"
-        "Your all-in-one Discord assistant ⚡"
-    )
-
-
-# ================= AFK =================
-@bot.command()
-async def afk(ctx, *, reason="AFK"):
-    afk_users[ctx.author.id] = {
-        "reason": reason,
-        "time": time.time(),
-    }
-
-    await ctx.send(f"🟢 You are now AFK\nReason: {reason}")
-
-
-# ================= DM ALL =================
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def dmall(ctx, *, message):
-    sent = 0
-
-    async for member in ctx.guild.fetch_members(limit=None):
-        if member.bot:
-            continue
-
-        try:
-            await member.send(message)
-            sent += 1
-        except Exception:
-            pass
-
-    await ctx.send(f"📩 Sent DM to {sent} members.")
-
-
-# ================= JOIN VOICE =================
-@bot.command()
-async def join(ctx):
-    try:
-        if not ctx.author.voice:
-            await ctx.send("❌ You are not in a voice channel!")
-            return
-
-        channel = ctx.author.voice.channel
-
-        if ctx.voice_client:
-            await ctx.voice_client.move_to(channel)
-        else:
-            await channel.connect()
-
-        await ctx.send("🎧 Joined voice channel")
-
-    except Exception as e:
-        print(f"JOIN ERROR: {e}")
-        await ctx.send(f"❌ Join Error: {e}")
-
-
-# ================= PLAY MUSIC =================
-@bot.command()
+# ================= PLAY =================
+@bot.command(name="play")
 async def play(ctx, url):
+
     if not ctx.voice_client:
         await ctx.invoke(join)
 
@@ -153,81 +217,46 @@ async def play(ctx, url):
 
     source = await discord.FFmpegOpusAudio.from_probe(
         audio_url,
-        **ffmpeg_options,
+        **ffmpeg_options
     )
 
     voice.stop()
     voice.play(source)
 
-    await ctx.send(f"🎵 Now Playing: **{info['title']}**")
-# ================= MUSIC CONTROLS =================
-@bot.command()
+    await ctx.send(f"🎵 Playing: {info['title']}")
+
+
+# ================= CONTROLS =================
+@bot.command(name="pause")
 async def pause(ctx):
-    if ctx.voice_client and ctx.voice_client.is_playing():
+    if ctx.voice_client:
         ctx.voice_client.pause()
         await ctx.send("⏸️ Paused")
 
 
-@bot.command()
+@bot.command(name="resume")
 async def resume(ctx):
-    if ctx.voice_client and ctx.voice_client.is_paused():
+    if ctx.voice_client:
         ctx.voice_client.resume()
         await ctx.send("▶️ Resumed")
 
 
-@bot.command()
+@bot.command(name="skip")
 async def skip(ctx):
     if ctx.voice_client:
         ctx.voice_client.stop()
         await ctx.send("⏭️ Skipped")
 
 
-@bot.command()
+@bot.command(name="stop")
 async def stop(ctx):
     if ctx.voice_client:
         await ctx.voice_client.disconnect()
-        await ctx.send("⛔ Stopped & left voice")
-
-
-# ================= AFK HANDLER =================
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
-
-    user_id = message.author.id
-
-    # Remove AFK when user sends a message
-    if user_id in afk_users:
-        data = afk_users.pop(user_id)
-        afk_time = round(time.time() - data["time"])
-
-        await message.channel.send(
-            f"🟢 Welcome back {message.author.mention}\n"
-            f"Reason: {data['reason']}\n"
-            f"AFK Time: {afk_time} sec"
-        )
-
-    # Notify if mentioned user is AFK
-    for user in message.mentions:
-        if user.id in afk_users:
-            data = afk_users[user.id]
-            afk_time = round(time.time() - data["time"])
-
-            await message.channel.send(
-                f"🟡 {user.name} is AFK\n"
-                f"Reason: {data['reason']}\n"
-                f"AFK for: {afk_time} sec"
-            )
-
-    await bot.process_commands(message)
+        await ctx.send("⛔ Disconnected")
 
 
 # ================= START BOT =================
 if TOKEN is None:
-    raise RuntimeError(
-        "TOKEN environment variable is not set. "
-        "Add TOKEN in Railway Variables."
-    )
+    raise RuntimeError("TOKEN not set in environment variables")
 
 bot.run(TOKEN)
