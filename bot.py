@@ -13,16 +13,16 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ================= CONFIG (EDIT THIS) =================
-UPI_ID = "yourupi@okaxis"
+UPI_ID = "nihalsoni3177@fam"
 UPI_QR = "https://your-upi-qr.png"
 
-USDT_ADDRESS = "your-usdt-wallet"
+USDT_ADDRESS = "0x4BBaBe2c192178A30376dfb841fEaDEd89da2aAc"
 USDT_QR = "https://your-usdt-qr.png"
 
-LTC_ADDRESS = "your-ltc-wallet"
+LTC_ADDRESS = "ltc1qswzt92jn9svwzsz567tvm56ym4hktdmgk9jjwg"
 LTC_QR = "https://your-ltc-qr.png"
 
-LOG_CHANNEL_ID = 123456789012345678  # change this
+LOG_CHANNEL_ID = 1517464574381527080  # change this
 
 # ================= DATA =================
 orders = {}
