@@ -1,15 +1,9 @@
 import discord
 from discord.ext import commands
-import time
 import os
 
 # ================= TOKEN =================
 TOKEN = os.getenv("TOKEN")
-
-# ================= CONFIG =================
-UPI_ID = "yourupi@okaxis"
-QR_IMAGE_URL = "https://your-qr-image-link.png"
-LOG_CHANNEL_ID = 123456789012345678  # change this
 
 # ================= INTENTS =================
 intents = discord.Intents.default()
@@ -18,15 +12,28 @@ intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-afk_users = {}
+# ================= CONFIG (EDIT THIS) =================
+UPI_ID = "yourupi@okaxis"
+UPI_QR = "https://your-upi-qr.png"
+
+USDT_ADDRESS = "your-usdt-wallet"
+USDT_QR = "https://your-usdt-qr.png"
+
+LTC_ADDRESS = "your-ltc-wallet"
+LTC_QR = "https://your-ltc-qr.png"
+
+LOG_CHANNEL_ID = 123456789012345678  # change this
+
+# ================= DATA =================
 orders = {}
+afk_users = {}
 
 # ================= READY =================
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
 
-# ================= FIX MESSAGE HANDLER =================
+# ================= MESSAGE HANDLER =================
 @bot.event
 async def on_message(message):
     if message.author.bot:
@@ -44,21 +51,20 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-# ================= TEST =================
+# ================= HIGH-TECH TEST =================
 @bot.command()
 async def test(ctx):
 
-    latency = round(bot.latency * 1000)
-
     embed = discord.Embed(
-        title="⚙️ SYSTEM STATUS",
+        title="⚡ NEURAL SYSTEM STATUS",
+        description="All systems operational",
         color=discord.Color.green()
     )
 
     embed.add_field(name="Status", value="ONLINE 🟢", inline=True)
-    embed.add_field(name="Ping", value=f"{latency}ms", inline=True)
-    embed.add_field(name="Shop", value="ACTIVE ✔", inline=True)
-    embed.add_field(name="AFK", value="ACTIVE ✔", inline=True)
+    embed.add_field(name="Latency", value=f"{round(bot.latency*1000)}ms", inline=True)
+    embed.add_field(name="Shop Engine", value="ACTIVE ✔", inline=True)
+    embed.add_field(name="Payment Core", value="ACTIVE ✔", inline=True)
 
     await ctx.send(embed=embed)
 
@@ -68,33 +74,16 @@ async def afk(ctx, *, reason="AFK"):
     afk_users[ctx.author.id] = {"reason": reason}
     await ctx.send(f"😴 AFK set: {reason}")
 
-# ================= PURGE =================
+# ================= SHOP ENTRY =================
 @bot.command()
-@commands.has_permissions(manage_messages=True)
-async def purge(ctx, amount: int):
-
-    if amount < 1 or amount > 100:
-        return await ctx.send("❌ 1–100 only")
-
-    deleted = await ctx.channel.purge(limit=amount + 1)
-    await ctx.send(f"🧹 Deleted {len(deleted)-1}", delete_after=5)
-
-# ================= DM ALL =================
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def dmall(ctx, *, msg):
-
-    sent = 0
-
-    async for member in ctx.guild.fetch_members(limit=None):
-        if not member.bot:
-            try:
-                await member.send(msg)
-                sent += 1
-            except:
-                pass
-
-    await ctx.send(f"📩 Sent to {sent} users")
+async def shop(ctx):
+    await ctx.send(
+        "🛒 **NEURAL SHOP SYSTEM**\n\n"
+        "Use command:\n"
+        "`!buy <item> <price>`\n\n"
+        "Example:\n"
+        "`!buy Nitro 299`"
+    )
 
 # ================= BUY COMMAND =================
 @bot.command()
@@ -110,14 +99,15 @@ async def buy(ctx, item: str, price: int):
     }
 
     embed = discord.Embed(
-        title="💳 CHECKOUT",
+        title="💳 SECURE CHECKOUT",
         description=f"""
 🛍 Item: **{item}**
 💰 Price: **₹{price}**
+🆔 Order ID: `{order_id}`
 
-Choose payment method below:
+Select payment method:
 """,
-        color=discord.Color.blue()
+        color=discord.Color.purple()
     )
 
     await ctx.send(embed=embed, view=PaymentView(order_id))
@@ -130,22 +120,36 @@ class PaymentView(discord.ui.View):
 
     @discord.ui.button(label="📲 UPI", style=discord.ButtonStyle.success)
     async def upi(self, interaction, button):
+        await self.show(interaction, "UPI", UPI_ID, UPI_QR)
+
+    @discord.ui.button(label="🪙 USDT", style=discord.ButtonStyle.primary)
+    async def usdt(self, interaction, button):
+        await self.show(interaction, "USDT (TRC20)", USDT_ADDRESS, USDT_QR)
+
+    @discord.ui.button(label="💠 LTC", style=discord.ButtonStyle.secondary)
+    async def ltc(self, interaction, button):
+        await self.show(interaction, "LTC", LTC_ADDRESS, LTC_QR)
+
+    async def show(self, interaction, method, address, qr):
 
         order = orders[self.order_id]
 
         embed = discord.Embed(
-            title="📲 UPI PAYMENT",
+            title="⚡ PAYMENT GATEWAY",
             description=f"""
 🛍 Item: **{order['item']}**
-💰 Price: ₹{order['price']}
+💰 Price: **₹{order['price']}**
+📌 Method: **{method}**
 
-📌 UPI ID: `{UPI_ID}`
-📷 Scan QR below
+📍 Address:
+`{address}`
+
+Scan QR below 👇
 """,
             color=discord.Color.green()
         )
 
-        embed.set_image(url=QR_IMAGE_URL)
+        embed.set_image(url=qr)
 
         await interaction.response.send_message(
             embed=embed,
@@ -153,35 +157,19 @@ class PaymentView(discord.ui.View):
             ephemeral=True
         )
 
-    @discord.ui.button(label="🪙 Crypto", style=discord.ButtonStyle.primary)
-    async def crypto(self, interaction, button):
-
-        await interaction.response.send_message(
-            "🪙 Send Crypto manually (address not set)",
-            ephemeral=True
-        )
-
-    @discord.ui.button(label="💠 LTC", style=discord.ButtonStyle.secondary)
-    async def ltc(self, interaction, button):
-
-        await interaction.response.send_message(
-            "💠 LTC address not set",
-            ephemeral=True
-        )
-
-# ================= PAID BUTTON =================
+# ================= I PAID =================
 class PaidView(discord.ui.View):
     def __init__(self, order_id):
         super().__init__()
         self.order_id = order_id
 
-    @discord.ui.button(label="✅ I Paid", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="✅ I PAID", style=discord.ButtonStyle.primary)
     async def paid(self, interaction, button):
 
         orders[self.order_id]["status"] = "WAITING_CONFIRM"
 
         await interaction.response.send_message(
-            "🧾 Payment submitted! Waiting for admin confirmation.",
+            "🧾 Payment submitted. Waiting for admin confirmation.",
             ephemeral=True
         )
 
@@ -191,15 +179,19 @@ class PaidView(discord.ui.View):
 async def confirm(ctx, order_id: str):
 
     if order_id not in orders:
-        return await ctx.send("❌ Invalid order ID")
+        return await ctx.send("❌ Invalid Order ID")
 
     order = orders[order_id]
+
+    if order["status"] != "WAITING_CONFIRM":
+        return await ctx.send("❌ Order not in payment waiting state")
+
     user = await bot.fetch_user(order["user"])
 
     invoice = discord.Embed(
         title="🧾 INVOICE RECEIPT",
         description=f"""
-🆔 Order: {order_id}
+🆔 Order ID: {order_id}
 🛍 Item: {order['item']}
 💰 Price: ₹{order['price']}
 📌 Status: CONFIRMED ✅
@@ -217,7 +209,7 @@ async def confirm(ctx, order_id: str):
 
     order["status"] = "CONFIRMED"
 
-    await ctx.send("✅ Order confirmed")
+    await ctx.send("✅ Order confirmed successfully")
 
 # ================= RUN =================
 if TOKEN is None:
